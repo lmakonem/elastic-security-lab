@@ -1,0 +1,4 @@
+---
+kali_user: kali
+tools_directory: /home/kali/tools
+payload_directory: /tmp

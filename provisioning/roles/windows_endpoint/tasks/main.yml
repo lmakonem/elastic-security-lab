@@ -1,0 +1,33 @@
+---
+- name: Create temp directory
+  win_file:
+    path: C:\temp
+    state: directory
+
+- name: Create desktop instructions
+  win_copy:
+    dest: C:\Users\Public\Desktop\LAB_INSTRUCTIONS.txt
+    content: |
+      ELASTIC SECURITY LAB
+      
+      Kibana: https://10.20.30.10:5601
+      Login: elastic / ElasticSecurityLab2025!
+      
+      Test encoded PowerShell:
+      powershell.exe -encodedcommand VwByAGkAdABlAC0ASABvAHMAdAAgACIAVABlAHMAdABpAG4AZwAgAEUAbgBjAG8AZABlAGQAIABDAG8AbQBtAGEAbgBkACIA
+
+- name: Disable Windows Defender (lab only)
+  win_shell: |
+    Set-MpPreference -DisableRealtimeMonitoring $true
+    Set-MpPreference -DisableIOAVProtection $true
+  ignore_errors: yes
+
+- name: Allow Elastic Agent through firewall
+  win_firewall_rule:
+    name: "Elastic Agent"
+    localport: any
+    action: allow
+    direction: in
+    protocol: tcp
+    state: present
+    enabled: yes

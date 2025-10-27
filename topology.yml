@@ -1,0 +1,73 @@
+name: elastic-security-lab
+
+hosts:
+  - name: elastic-server
+    base_box:
+      image: debian-12-x86_64
+      mgmt_user: debian
+    flavor: standard.xlarge
+    volumes:
+      - size: 100
+
+  - name: kali-attacker
+    base_box:
+      image: kali-linux-2024
+      mgmt_user: kali
+    flavor: standard.medium
+
+  - name: debian-endpoint
+    base_box:
+      image: debian-12-x86_64
+      mgmt_user: debian
+    flavor: standard.medium
+
+  - name: windows-endpoint
+    base_box:
+      image: windows-10
+      mgmt_user: Administrator
+      mgmt_protocol: winrm
+    flavor: standard.large
+
+routers:
+  - name: main-router
+    base_box:
+      image: debian-12-x86_64
+      mgmt_user: debian
+    flavor: standard.small
+
+wan:
+  name: internet
+  cidr: 100.100.100.0/24
+
+networks:
+  - name: security-net
+    cidr: 10.20.30.0/24
+    accessible_by_user: true
+
+net_mappings:
+  - host: elastic-server
+    network: security-net
+    ip: 10.20.30.10
+  - host: kali-attacker
+    network: security-net
+    ip: 10.20.30.100
+  - host: debian-endpoint
+    network: security-net
+    ip: 10.20.30.20
+  - host: windows-endpoint
+    network: security-net
+    ip: 10.20.30.30
+
+router_mappings:
+  - router: main-router
+    network: security-net
+    ip: 10.20.30.1
+
+groups:
+  - name: elastic-agents
+    nodes:
+      - debian-endpoint
+      - windows-endpoint
+  - name: attack-simulation
+    nodes:
+      - kali-attacker

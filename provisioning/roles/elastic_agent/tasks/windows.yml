@@ -1,0 +1,100 @@
+---
+- name: Create temp directory
+  win_file:
+    path: C:\temp
+    state: directory
+
+- name: Download Elastic Agent for Windows
+  win_get_url:
+    url: "https://artifacts.elastic.co/downloads/beats/elastic-agent/elastic-agent-{{ elastic_agent_version }}-windows-x86_64.zip"
+    dest: "C:\\temp\\elastic-agent-{{ elastic_agent_version }}-windows-x86_64.zip"
+  retries: 3
+  delay: 10
+
+- name: Extract Elastic Agent
+  win_unzip:
+    src: "C:\\temp\\elastic-agent-{{ elastic_agent_version }}-windows-x86_64.zip"
+    dest: C:\temp
+    creates: "C:\\temp\\elastic-agent-{{ elastic_agent_version }}-windows-x86_64"
+
+- name: Wait for Fleet Server
+  win_wait_for:
+    host: "{{ elastic_server_ip }}"
+    port: 8220
+    timeout: 600
+    delay: 30
+
+- name: Get enrollment token from elastic server
+  slurp:
+    src: "{{ elastic_container_install_path | default('/opt/elastic-container') }}/enrollment_token.txt"
+  delegate_to: elastic-server
+  register: token_content
+  retries: 10
+  delay: 10
+
+- name: Set enrollment token
+  set_fact:
+    fleet_enrollment_token: "{{ token_content.content | b64decode | trim }}"
+
+- name: Install Elastic Agent on Windows
+  win_shell: |
+    cd "C:\temp\elastic-agent-{{ elastic_agent_version }}-windows-x86_64"
+    .\elastic-agent.exe install `
+      --url={{ elastic_fleet_server_url }} `
+      --enrollment-token={{ fleet_enrollment_token }} `
+      --insecure `
+      --force `
+      --non-interactive
+  args:
+    creates: "C:\\Program Files\\Elastic\\Agent\\elastic-agent.exe"
+
+- name: Wait for service
+  win_service:
+    name: Elastic Agent
+    state: started
+    start_mode: auto
+  retries: 5
+  delay: 10
+
+- name: Download Sysmon
+  win_get_url:
+    url: "https://download.sysinternals.com/files/Sysmon.zip"
+    dest: C:\temp\Sysmon.zip
+  when: install_sysmon | default(true) | bool
+  retries: 3
+  delay: 5
+
+- name: Create Sysmon directory
+  win_file:
+    path: "{{ sysmon_install_path | default('C:\\Program Files\\Sysmon') }}"
+    state: directory
+  when: install_sysmon | default(true) | bool
+
+- name: Extract Sysmon
+  win_unzip:
+    src: C:\temp\Sysmon.zip
+    dest: "{{ sysmon_install_path | default('C:\\Program Files\\Sysmon') }}"
+    creates: "{{ sysmon_install_path | default('C:\\Program Files\\Sysmon') }}\\Sysmon64.exe"
+  when: install_sysmon | default(true) | bool
+
+- name: Download Sysmon config
+  win_get_url:
+    url: "{{ sysmon_config_url }}"
+    dest: "{{ sysmon_install_path | default('C:\\Program Files\\Sysmon') }}\\sysmonconfig.xml"
+  when: install_sysmon | default(true) | bool
+  retries: 3
+  delay: 5
+
+- name: Install Sysmon
+  win_shell: |
+    cd "{{ sysmon_install_path | default('C:\\Program Files\\Sysmon') }}"
+    .\Sysmon64.exe -accepteula -i sysmonconfig.xml
+  when: install_sysmon | default(true) | bool
+  register: sysmon_install
+  failed_when: false
+
+- name: Ensure Elastic Agent running
+  win_service:
+    name: Elastic Agent
+    state: started
+    start_mode: auto

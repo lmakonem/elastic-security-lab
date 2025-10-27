@@ -1,0 +1,8 @@
+---
+elastic_container_install_path: /opt/elastic-container
+elastic_stack_version: "8.12.2"
+elastic_password: "ElasticSecurityLab2025!"
+elastic_container_repo: "https://github.com/peasead/elastic-container.git"
+elastic_container_branch: "main"
+kibana_port: 5601
+fleet_server_port: 8220

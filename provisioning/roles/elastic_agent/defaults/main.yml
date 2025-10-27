@@ -1,0 +1,7 @@
+---
+elastic_agent_version: "8.12.2"
+elastic_fleet_server_url: "https://10.20.30.10:8220"
+elastic_server_ip: "10.20.30.10"
+install_sysmon: true
+sysmon_config_url: "https://raw.githubusercontent.com/SwiftOnSecurity/sysmon-config/master/sysmonconfig-export.xml"
+sysmon_install_path: "C:\\Program Files\\Sysmon"

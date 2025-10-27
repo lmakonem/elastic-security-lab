@@ -1,0 +1,28 @@
+---
+- hosts: all
+  gather_facts: yes
+  become: yes
+
+- hosts: elastic-server
+  gather_facts: yes
+  become: yes
+  roles:
+    - elastic_container
+
+- hosts: kali-attacker
+  gather_facts: yes
+  become: yes
+  roles:
+    - kali_attacker
+
+- hosts: windows-endpoint
+  gather_facts: yes
+  become: yes
+  roles:
+    - windows_endpoint
+
+- hosts: elastic-agents
+  gather_facts: yes
+  become: yes
+  roles:
+    - elastic_agent

@@ -1,0 +1,129 @@
+---
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install required packages
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+      - git
+      - jq
+      - python3-docker
+    state: present
+
+- name: Add Docker GPG key
+  apt_key:
+    url: https://download.docker.com/linux/debian/gpg
+    state: present
+
+- name: Add Docker repository
+  apt_repository:
+    repo: "deb [arch=amd64] https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable"
+    state: present
+
+- name: Install Docker
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+
+- name: Start and enable Docker
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Create elastic container directory
+  file:
+    path: "{{ elastic_container_install_path }}"
+    state: directory
+    mode: '0755'
+
+- name: Clone Elastic Container Project
+  git:
+    repo: "{{ elastic_container_repo }}"
+    dest: "{{ elastic_container_install_path }}"
+    version: "{{ elastic_container_branch }}"
+    force: yes
+
+- name: Configure .env file
+  template:
+    src: .env.j2
+    dest: "{{ elastic_container_install_path }}/.env"
+    mode: '0644'
+
+- name: Make script executable
+  file:
+    path: "{{ elastic_container_install_path }}/elastic-container.sh"
+    mode: '0755'
+
+- name: Start Elastic Container
+  shell: |
+    cd {{ elastic_container_install_path }}
+    ./elastic-container.sh start
+  args:
+    creates: "{{ elastic_container_install_path }}/.started"
+  async: 900
+  poll: 15
+
+- name: Create started marker
+  file:
+    path: "{{ elastic_container_install_path }}/.started"
+    state: touch
+
+- name: Wait for Elasticsearch
+  uri:
+    url: "https://{{ ansible_default_ipv4.address }}:9200"
+    validate_certs: no
+    status_code: 200
+    user: elastic
+    password: "{{ elastic_password }}"
+    force_basic_auth: yes
+  register: result
+  until: result.status == 200
+  retries: 60
+  delay: 10
+
+- name: Wait for Kibana
+  uri:
+    url: "https://{{ ansible_default_ipv4.address }}:{{ kibana_port }}/api/status"
+    validate_certs: no
+    status_code: 200
+  register: kibana_result
+  until: kibana_result.status == 200
+  retries: 60
+  delay: 10
+
+- name: Get Fleet enrollment token
+  shell: |
+    docker exec es01 bash -c "grep 'Fleet enrollment token' /tmp/setup.log | awk '{print \$NF}'" 2>/dev/null || \
+    docker logs es01 2>&1 | grep -oP 'Fleet enrollment token: \K[A-Za-z0-9+/=_-]+' | head -1
+  register: enrollment_token_raw
+  changed_when: false
+  failed_when: false
+  retries: 5
+  delay: 10
+
+- name: Save enrollment token
+  copy:
+    content: "{{ enrollment_token_raw.stdout }}"
+    dest: "{{ elastic_container_install_path }}/enrollment_token.txt"
+    mode: '0644'
+  when: enrollment_token_raw.stdout != ""
+
+- name: Display Elastic info
+  debug:
+    msg:
+      - "Elastic Stack Ready!"
+      - "Kibana: https://{{ ansible_default_ipv4.address }}:{{ kibana_port }}"
+      - "Username: elastic"
+      - "Password: {{ elastic_password }}"

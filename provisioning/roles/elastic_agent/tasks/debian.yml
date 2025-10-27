@@ -1,0 +1,60 @@
+---
+- name: Install prerequisites
+  apt:
+    name:
+      - curl
+      - apt-transport-https
+    state: present
+    update_cache: yes
+
+- name: Download Elastic Agent
+  get_url:
+    url: "https://artifacts.elastic.co/downloads/beats/elastic-agent/elastic-agent-{{ elastic_agent_version }}-linux-x86_64.tar.gz"
+    dest: "/tmp/elastic-agent-{{ elastic_agent_version }}-linux-x86_64.tar.gz"
+    mode: '0644'
+
+- name: Extract Elastic Agent
+  unarchive:
+    src: "/tmp/elastic-agent-{{ elastic_agent_version }}-linux-x86_64.tar.gz"
+    dest: /tmp
+    remote_src: yes
+    creates: "/tmp/elastic-agent-{{ elastic_agent_version }}-linux-x86_64"
+
+- name: Wait for Fleet Server
+  wait_for:
+    host: "{{ elastic_server_ip }}"
+    port: 8220
+    timeout: 600
+    delay: 30
+
+- name: Get enrollment token from elastic server
+  slurp:
+    src: "{{ elastic_container_install_path | default('/opt/elastic-container') }}/enrollment_token.txt"
+  delegate_to: elastic-server
+  register: token_content
+  retries: 10
+  delay: 10
+
+- name: Set enrollment token
+  set_fact:
+    fleet_enrollment_token: "{{ token_content.content | b64decode | trim }}"
+
+- name: Install Elastic Agent
+  shell: |
+    cd /tmp/elastic-agent-{{ elastic_agent_version }}-linux-x86_64
+    ./elastic-agent install \
+      --url={{ elastic_fleet_server_url }} \
+      --enrollment-token={{ fleet_enrollment_token }} \
+      --insecure \
+      --force \
+      --non-interactive
+  args:
+    creates: /opt/Elastic/Agent/elastic-agent
+  register: agent_install
+
+- name: Ensure agent service running
+  systemd:
+    name: elastic-agent
+    state: started
+    enabled: yes
+  ignore_errors: yes
